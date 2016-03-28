@@ -1,82 +1,89 @@
 package org.jenkinsci.plugins.p4.trigger;
 
 import hudson.Extension;
-import hudson.model.UnprotectedRootAction;
 import hudson.model.Job;
+import hudson.model.UnprotectedRootAction;
 import hudson.triggers.Trigger;
+import jenkins.model.Jenkins;
+import jenkins.model.ParameterizedJobMixIn;
+import net.sf.json.JSONObject;
+import org.apache.commons.io.IOUtils;
+import org.kohsuke.stapler.StaplerRequest;
 
 import java.io.IOException;
 import java.net.URLDecoder;
 import java.util.logging.Logger;
 
-import jenkins.model.Jenkins;
-import jenkins.model.ParameterizedJobMixIn;
-import net.sf.json.JSONObject;
-
-import org.apache.commons.io.IOUtils;
-import org.kohsuke.stapler.StaplerRequest;
-
 @Extension
 public class P4Hook implements UnprotectedRootAction {
 
-	// https://github.com/jenkinsci/bitbucket-plugin
+    private static final Logger LOGGER = Logger.getLogger(P4Hook.class.getName());
 
-	@Override
-	public String getIconFileName() {
-		return "/plugin/p4/icons/p4.png";
-	}
+    public static final String P4_HOOK_URL = "p4";
 
-	@Override
-	public String getDisplayName() {
-		return "P4 Trigger";
-	}
+    private final P4JobProbe probe = new P4JobProbe();
 
-	@Override
-	public String getUrlName() {
-		return "p4";
-	}
+    // https://github.com/jenkinsci/bitbucket-plugin
 
-	public void doChange(StaplerRequest req) throws IOException {
-		String body = IOUtils.toString(req.getInputStream());
-		String contentType = req.getContentType();
-		if (contentType != null && contentType.startsWith("application/json")) {
-			body = URLDecoder.decode(body, "UTF-8");
-		}
-		if (body.startsWith("payload=")) {
-			body = body.substring(8);
-			JSONObject payload = JSONObject.fromObject(body);
+    @Override
+    public String getIconFileName() {
+        return null;
+    }
 
-			String port = payload.getString("p4port");
-			String change = payload.getString("change");
+    @Override
+    public String getDisplayName() {
+        return null;
+    }
 
-			LOGGER.info("Received trigger event: " + body);
-			probeJobs(port, change);
-		}
-	}
+    @Override
+    public String getUrlName() {
+        return P4_HOOK_URL;
+    }
 
-	private void probeJobs(String port, String change) throws IOException {
-		for (Job<?, ?> job : Jenkins.getInstance().getAllItems(Job.class)) {
-			P4Trigger trigger = null;
-			LOGGER.fine("P4: trying: " + job.getName());
+    public void doChange(StaplerRequest req) throws IOException {
+        String body = IOUtils.toString(req.getInputStream());
+        String contentType = req.getContentType();
+        if (contentType != null && contentType.startsWith("application/json")) {
+            body = URLDecoder.decode(body, "UTF-8");
+        }
+        if (body.startsWith("payload=")) {
+            body = body.substring(8);
+            JSONObject payload = JSONObject.fromObject(body);
 
-			if (job instanceof ParameterizedJobMixIn.ParameterizedJob) {
-				ParameterizedJobMixIn.ParameterizedJob pJob = (ParameterizedJobMixIn.ParameterizedJob) job;
-				for (Trigger<?> t : pJob.getTriggers().values()) {
-					if (t instanceof P4Trigger) {
-						trigger = (P4Trigger) t;
-						break;
-					}
-				}
-			}
+            LOGGER.info("Received trigger event: " + body);
 
-			if (trigger != null) {
-				LOGGER.info("P4: probing: " + job.getName());
-				trigger.poke(job, port);
-			} else {
-				LOGGER.fine("P4: trigger not set: " + job.getName());
-			}
-		}
-	}
+            final P4ChangePayload pPayload = new P4ChangePayload(
+                    payload.getString("p4port"),
+                    payload.getInt("change"),
+                    payload.getString("user")
+            );
 
-	final static Logger LOGGER = Logger.getLogger(P4Hook.class.getName());
+            probe.triggerMatchingJobs(pPayload);
+        }
+    }
+
+    @Deprecated
+    private void probeJobs(String port, String change) throws IOException {
+        for (Job<?, ?> job : Jenkins.getInstance().getAllItems(Job.class)) {
+            P4Trigger trigger = null;
+            LOGGER.fine("P4: trying: " + job.getName());
+
+            if (job instanceof ParameterizedJobMixIn.ParameterizedJob) {
+                ParameterizedJobMixIn.ParameterizedJob pJob = (ParameterizedJobMixIn.ParameterizedJob) job;
+                for (Trigger<?> t : pJob.getTriggers().values()) {
+                    if (t instanceof P4Trigger) {
+                        trigger = (P4Trigger) t;
+                        break;
+                    }
+                }
+            }
+
+            if (trigger != null) {
+                LOGGER.info("P4: probing: " + job.getName());
+                trigger.poke(job, port);
+            } else {
+                LOGGER.fine("P4: trigger not set: " + job.getName());
+            }
+        }
+    }
 }
