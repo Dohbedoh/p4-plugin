@@ -18,7 +18,7 @@ public class P4CrumbExclusion extends CrumbExclusion {
     public boolean process(HttpServletRequest req, HttpServletResponse resp, FilterChain chain)
             throws IOException, ServletException {
         String pathInfo = req.getPathInfo();
-        if (pathInfo != null && (pathInfo.equals(EXCLUSION_PATH) || pathInfo.equals(EXCLUSION_PATH + "/"))) {
+        if (pathInfo != null && (pathInfo.startsWith(EXCLUSION_PATH) || pathInfo.startsWith(EXCLUSION_PATH + "/"))) {
             chain.doFilter(req, resp);
             return true;
         }

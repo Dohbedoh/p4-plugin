@@ -12,6 +12,7 @@ import org.kohsuke.stapler.StaplerRequest;
 
 import java.io.IOException;
 import java.net.URLDecoder;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 @Extension
@@ -42,23 +43,28 @@ public class P4Hook implements UnprotectedRootAction {
 
     public void doChange(StaplerRequest req) throws IOException {
         String body = IOUtils.toString(req.getInputStream());
-        String contentType = req.getContentType();
-        if (contentType != null && contentType.startsWith("application/json")) {
-            body = URLDecoder.decode(body, "UTF-8");
-        }
-        if (body.startsWith("payload=")) {
-            body = body.substring(8);
-            JSONObject payload = JSONObject.fromObject(body);
 
-            LOGGER.info("Received trigger event: " + body);
+        if (!body.isEmpty() && req.getRequestURI().contains("/" + P4_HOOK_URL + "/")) {
+            String contentType = req.getContentType();
+            if (contentType != null && contentType.startsWith("application/json")) {
+                body = URLDecoder.decode(body, "UTF-8");
+            }
+            if (body.startsWith("payload=")) {
+                body = body.substring(8);
+                JSONObject payload = JSONObject.fromObject(body);
 
-            final P4ChangePayload pPayload = new P4ChangePayload(
-                    payload.getString("p4port"),
-                    payload.getInt("change"),
-                    payload.getString("user")
-            );
+                LOGGER.info("Received trigger event: " + body);
 
-            probe.triggerMatchingJobs(pPayload);
+                final P4ChangePayload pPayload = new P4ChangePayload(
+                        payload.getString("p4port"),
+                        payload.getInt("change"),
+                        payload.getString("user")
+                );
+
+                probe.triggerMatchingJobs(pPayload);
+            }
+        } else {
+            LOGGER.log(Level.WARNING, "The Jenkins job cannot be triggered. Ensure the WebHook URL matches `" + Jenkins.getInstance().getRootUrl() + P4_HOOK_URL + "/`");
         }
     }
 
