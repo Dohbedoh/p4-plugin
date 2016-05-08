@@ -3,10 +3,13 @@ package org.jenkinsci.plugins.p4.trigger;
 import hudson.Extension;
 import hudson.model.Job;
 import hudson.model.UnprotectedRootAction;
+import hudson.security.ACL;
 import hudson.triggers.Trigger;
 import jenkins.model.Jenkins;
 import jenkins.model.ParameterizedJobMixIn;
 import net.sf.json.JSONObject;
+import org.acegisecurity.context.SecurityContext;
+import org.acegisecurity.context.SecurityContextHolder;
 import org.apache.commons.io.IOUtils;
 import org.kohsuke.stapler.StaplerRequest;
 
@@ -61,10 +64,50 @@ public class P4Hook implements UnprotectedRootAction {
                         payload.getString("user")
                 );
 
-                probe.triggerMatchingJobs(pPayload);
+                triggerMatchingJobs(pPayload);
             }
         } else {
-            LOGGER.log(Level.WARNING, "The Jenkins job cannot be triggered. Ensure the WebHook URL matches `" + Jenkins.getInstance().getRootUrl() + P4_HOOK_URL + "/`");
+            LOGGER.log(Level.WARNING, "The Jenkins job cannot be triggered. Ensure the WebHook URL matches `"
+                    + Jenkins.getInstance().getRootUrl() + P4_HOOK_URL + "/`");
+        }
+    }
+
+    /**
+     * Find all matching jobs and trigger if it matches the {@link P4ChangePayload} passed in.
+     */
+    public final void triggerMatchingJobs(P4ChangePayload pPayload) {
+
+        SecurityContext old = ACL.impersonate(ACL.SYSTEM);
+        try {
+            for (Job<?, ?> job : Jenkins.getInstance().getAllItems(Job.class)) {
+                P4Trigger trigger = null;
+                LOGGER.log(Level.FINE, "P4: Inspecting: {0}", job.getName());
+
+                if (job instanceof ParameterizedJobMixIn.ParameterizedJob) {
+                    ParameterizedJobMixIn.ParameterizedJob pJob = (ParameterizedJobMixIn.ParameterizedJob) job;
+                    for (Trigger<?> t : pJob.getTriggers().values()) {
+                        if (t instanceof P4Trigger) {
+                            trigger = (P4Trigger) t;
+                            break;
+                        }
+                    }
+                }
+
+                if (trigger != null) {
+
+                    LOGGER.log(Level.FINE, "Considering to poke {0}", job.getFullDisplayName());
+
+                    if (!probe.matchingJob(job, pPayload)) {
+                        return;
+                    }
+
+                    trigger.onPost(pPayload);
+                } else {
+                    LOGGER.log(Level.FINE, "P4: trigger not set: ", job.getFullDisplayName());
+                }
+            }
+        } finally {
+            SecurityContextHolder.setContext(old);
         }
     }
 
@@ -91,5 +134,13 @@ public class P4Hook implements UnprotectedRootAction {
                 LOGGER.fine("P4: trigger not set: " + job.getName());
             }
         }
+    }
+
+    public static P4Hook get() {
+        Jenkins instance = Jenkins.getInstance();
+        if (instance == null) {
+            return null;
+        }
+        return instance.getInjector().getInstance(P4Hook.class);
     }
 }
