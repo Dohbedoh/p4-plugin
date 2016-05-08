@@ -29,7 +29,7 @@ public class P4JobProbe {
                 String id = p4scm.getCredential();
                 P4BaseCredentials credential = ConnectionHelper.findCredential(id);
 
-                return credential != null && credential.getP4port().equals(pPayload.getPort());
+                return credential != null && credential.getP4port().equalsIgnoreCase(pPayload.getPort());
             }
         }
         return false;
