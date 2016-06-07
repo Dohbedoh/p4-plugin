@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.net.URLDecoder;
 import java.util.logging.Logger;
 
+import javax.annotation.CheckForNull;
 import javax.servlet.ServletException;
 
 import jenkins.model.Jenkins;
@@ -53,10 +54,14 @@ public class P4Hook implements UnprotectedRootAction {
 			String change = payload.getString("change");
 
 			LOGGER.info("Received trigger event: " + body);
-			probeJobs(port, change);
+			if(port != null) {
+				probeJobs(port, change);
+			} else {
+				LOGGER.fine("p4port must be specified");
+			}
 		}
 	}
-	
+
 	public void doChangeSubmit(StaplerRequest req, StaplerResponse rsp)
 			throws IOException, ServletException {
 
@@ -64,16 +69,20 @@ public class P4Hook implements UnprotectedRootAction {
 		if (!formData.isEmpty()) {
 			String change = req.getParameter("_.change");
 			String port = req.getParameter("_.p4port");
-			
+
 			LOGGER.info("Manual trigger event: ");
-			probeJobs(port, change);
-			
+			if(port != null) {
+				probeJobs(port, change);
+			} else {
+				LOGGER.fine("p4port must be specified");
+			}
+
 			// send the user back.
 			rsp.sendRedirect("../");
 		}
 	}
 
-	private void probeJobs(String port, String change) throws IOException {
+	private void probeJobs(@CheckForNull String port, String change) throws IOException {
 		Jenkins j = Jenkins.getInstance();
 		if(j == null) {
 			LOGGER.warning("Jenkins instance is null.");

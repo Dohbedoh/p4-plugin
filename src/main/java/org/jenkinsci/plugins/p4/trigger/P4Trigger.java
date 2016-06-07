@@ -109,6 +109,7 @@ public class P4Trigger extends Trigger<Job<?, ?>> {
 	}
 
 	private boolean matchServer(Job<?, ?> job, String port) {
+
 		//Get all the trigger for this Job
 		SCMTriggerItem item = SCMTriggerItem.SCMTriggerItems.asSCMTriggerItem(job);
 		//As soon as we find a match, return
@@ -117,7 +118,7 @@ public class P4Trigger extends Trigger<Job<?, ?>> {
 				PerforceScm p4scm = (PerforceScm) scmTrigger;
 				String id = p4scm.getCredential();
 				P4BaseCredentials credential = ConnectionHelper.findCredential(id);
-				if (credential.getP4port().equals(port)) {
+				if (credential != null && credential.getP4port() != null && credential.getP4port().equals(port)) {
 					return true;
 				}
 			}
